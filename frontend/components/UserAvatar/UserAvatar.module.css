@@ -1,0 +1,65 @@
+.avatarContainer {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: inline-block;
+  }
+  
+  .avatar {
+    background-color: #0073e6; /* Light blue */
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  .dropdown {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 200px;
+    padding: 0px 0;
+    z-index: 10;
+  }
+  
+  .logoutButton {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    font-size: 14px; /* Equivalent to text-sm */
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out;
+  }
+  
+  .logoutButton:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .logoutButton:focus {
+    outline: none; /* Equivalent to focus-visible:outline-0 */
+  }
+  
+  .iconContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+  }
+  
+  .logoutIcon {
+    width: 20px;
+    height: 20px;
+    color: #6b7280; /* Dark gray */
+  }
+  

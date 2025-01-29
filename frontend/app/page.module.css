@@ -1,0 +1,80 @@
+.container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+  
+  .left, .right {
+    display: flex;
+    width: 50%;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+    flex-direction: column;
+  }
+
+  .left {
+    overflow: hidden;
+    display: block;
+    flex: 1; /* Takes 50% of the width */
+    /* background-image: url('/home.png');  */
+    /* background: linear-gradient(180deg, #63B3F3 0%, #9B85F9 50%, #F290E8 100%);
+    background: linear-gradient(to bottom right, #4A80B8 0%, #6B4EBA 50%, #D96FAE 100%);
+    background: radial-gradient(
+      circle at top right,
+      #3566A3 0%, 
+      #5A4BB5 30%, 
+      #91428F 70%, 
+      #C84676 100%
+  ); */
+    /* background: rgb(82,115,247); */
+    /* background: linear-gradient(90deg, rgba(82,115,247,1) 0%, rgba(141,141,252,1) 100%, rgba(255,255,255,1) 100%); */
+    background: linear-gradient(
+    to bottom right, 
+    #566BF6 0%,  /* Dark Blue */
+    #C088BD 50%, /* Purple-Pink */
+    #F792BA 100% /* Light Pink */
+  );
+    background-size: cover; /* Ensures the image covers the entire div */
+    background-position: center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents tiling of the image */
+  }
+  
+  .image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+  }
+  
+  .right {
+    background-color: #ffffff;
+  }
+  
+  .content {
+    text-align: center;
+    width: 80%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+
+  /* Media query for screens smaller than 700px */
+@media (max-width: 700px) {
+    .container {
+        flex-direction: column;  /* Change the container direction to column */
+    }
+
+    .left, .right {
+        width: 100%;  /* Make both left and right take full width */
+        margin-bottom: 20px;  /* Add some space between sections */
+    }
+    
+    .left{
+        min-height: 100vh;
+    }
+
+    .right {
+        border: none;  /* Remove border in mobile view */
+    }
+}
