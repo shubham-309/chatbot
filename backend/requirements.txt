@@ -109,5 +109,4 @@ openpyxl
 PyPDF2
 langchain-pinecone>=0.2.2  # Ensure compatibility with langchain-core
 numpy>=1.23.2  # Downgrade to a compatible version
-pandas>=2.2.3langchain-openai
 pymysql
