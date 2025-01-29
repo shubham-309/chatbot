@@ -107,8 +107,8 @@ Werkzeug==3.1.3
 streamlit 
 openpyxl 
 PyPDF2
-langchain-core==0.3.29  # Update to match langchain-pinecone's requirement
-langchain-pinecone==0.2.2  # Ensure compatibility with langchain-core
-numpy==1.23.2  # Downgrade to a compatible version
-pandas==2.2.3langchain-openai
+langchain-core>=0.3.29  # Update to match langchain-pinecone's requirement
+langchain-pinecone>=0.2.2  # Ensure compatibility with langchain-core
+numpy>=1.23.2  # Downgrade to a compatible version
+pandas>=2.2.3langchain-openai
 pymysql
