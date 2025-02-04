@@ -66,8 +66,8 @@ def login():
             "access_token",  # Cookie name
             access_token,    # JWT token value
             httponly=True,   # JavaScript cannot access this cookie
-            secure=False,    # Use True in production with HTTPS
-            samesite="Lax",  # Restrict cross-site sending
+            secure=True,    # Use True in production with HTTPS
+            samesite=None,  # Restrict cross-site sending
             max_age=3600     # Cookie expiration time in seconds
         )
         return response
@@ -151,8 +151,8 @@ def google_authorized():
             "access_token",  # Cookie name
             access_token,    # JWT token value
             httponly=True,   # JavaScript cannot access this cookie
-            secure=False,    # Use True in production with HTTPS
-            samesite="Lax",  # Restrict cross-site sending
+            secure=True,    # Use True in production with HTTPS
+            samesite=None,  # Restrict cross-site sending
             max_age=3600     # Cookie expiration time in seconds
         )
 
