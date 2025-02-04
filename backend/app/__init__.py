@@ -30,8 +30,8 @@ def create_app():
 
     oauth.register(
         name='google',
-        client_id="229253112686-iqfc9k9vudissfoq3rf8ik6708fq365t.apps.googleusercontent.com",
-        client_secret="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",
+        client_id=app.config.get("GOOGLE_CLIENT_ID"),
+        client_secret=app.config.get("GOOGLE_CLIENT_SECRET"),
         access_token_url='https://accounts.google.com/o/oauth2/token',
         authorize_url='https://accounts.google.com/o/oauth2/auth',
         api_base_url='https://www.googleapis.com/oauth2/v1/',
