@@ -156,7 +156,7 @@ def ingest_to_pinecone_docs(companies: List[CompanyInfo], embeddings):
                     embedding=embeddings,
                     index_name=index
                 )
-                print("Successfully ingested approved companies into Pinecone.")
+                st.success("Successfully ingested into Pinecone.")
             except Exception as e:
                 print(f"Error while ingesting to Pinecone: {e}")
         else:
