@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List, Dict, Optional
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -11,6 +12,8 @@ load_dotenv()
 # Define the desired data structure with the 'all_parameters_collected' flag
 from typing import Optional
 from pydantic import BaseModel, Field
+
+index = os.getenv('PINECONE_INDEX_NAME')
 
 # Define the parameters as a nested model
 class FreezoneParameters(BaseModel):
@@ -59,21 +62,29 @@ def vector_search(
     # Initialize the embedding model and vector store
     embeddings = OpenAIEmbeddings()
     vector_store = PineconeVectorStore(
-        index_name="test",  # Replace with your Pinecone index name
+        index_name=index,  # Replace with your Pinecone index name
         embedding=embeddings,
         text_key="text",
     )
 
     # Construct metadata filter based on the inputs
-    metadata_filter = f"""The company has {no_of_shareholder} shareholders, employs {no_of_visa} visa holders, incurs a total cost of {cost}, and operates out of the {office} office."""
+    # metadata_filter = f"""The company has {no_of_shareholder} shareholders, employs {no_of_visa} visa holders, incurs a total cost of {cost}, and operates out of the {office} office."""
+    metadata_filter = {
+        "number_of_visas": {"$gte": no_of_visa},
+        "number_of_shareholders": {"$gte": no_of_shareholder},
+        "cost": {"$lte": cost},
+        "office_required": office,
+    }
 
     # Perform similarity search with metadata filtering
     similarity_search_results = vector_store.similarity_search_with_score(
-        metadata_filter,
+        "",
         k=5,
+        filter=metadata_filter,
     )
 
     return similarity_search_results
+
 
 def give_suggestion(
     parameters: FreezoneParameters, user_query: str, chat_history: List[Dict[str, str]]
