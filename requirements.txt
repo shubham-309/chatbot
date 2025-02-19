@@ -2,4 +2,8 @@ streamlit
 pandas 
 openpyxl 
 PyPDF2
-langchain_core
+langchain-core
+langchain-openai
+PyPDF2
+python-dotenv
+openpyxl
