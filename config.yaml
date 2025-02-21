@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    admin@fzcompare.com:
+      name: Admin
+      email: admin@fzcompare.com
+      password: $2b$12$g6Nesyr01XSxeUPR5gBX9ep4nq1HoH5reLwobJb6ZpBMs3ebX4BrW  # Replace with hashed password
+    mourad@fzcompare.com:
+      name: Mourad
+      email: mourad@fzcompare.com
+      password: $2b$12$QKIz2LUx3GQ7Ga/tN31cqOa/J47arqWoYVl7RR8CT4Z1RwwfpeJb2  # Replace with hashed password
+cookie:
+  expiry_days: 30
+  key: 12@#sp309  # Replace with a unique string
+  name: fzcompare@#!   # Replace with a unique name
