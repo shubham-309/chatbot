@@ -5,6 +5,9 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from openpyxl import load_workbook
 import PyPDF2
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 from langchain.schema import Document
 import streamlit as st
 import os
@@ -18,6 +21,39 @@ from dotenv import load_dotenv
 load_dotenv()
 
 api_key = os.getenv("PINECONE_API_KEY")
+
+
+st.set_page_config(layout="wide", page_title="FZcompare Admin")
+
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 0rem; /* Reduce top padding */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Load config file with error handling
+try:
+    with open('config.yaml', 'r') as file:
+        config = yaml.load(file, Loader=SafeLoader)
+except FileNotFoundError:
+    st.error("config.yaml not found. Please ensure it exists in the working directory.")
+    st.stop()
+except yaml.YAMLError as e:
+    st.error(f"Error parsing config.yaml: {e}")
+    st.stop()
+
+# Initialize authenticator
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
+)
 
 
 # Define the structured output model
@@ -42,7 +78,6 @@ embeddings = OpenAIEmbeddings()
 
 # Create a Pinecone client instance with your API key.
 pc = Pinecone()
-print(pc.list_indexes())
 index = os.getenv('PINECONE_INDEX_NAME')
 
 # Initialize the parser for CompanyInfoList (not a list of CompanyInfoList)
@@ -167,75 +202,90 @@ def ingest_to_pinecone_docs(companies: List[CompanyInfo], embeddings):
 # Streamlit App Layout
 # ------------------------------
 
-st.title("Company Info Extraction, Approval & Ingestion App")
-st.write("Upload Excel and/or PDF files to extract, edit, approve, and then ingest company information into Pinecone.")
+st.title("FZcompare Admin")
+try:
+    authenticator.login(location='main')
+except Exception as e:
+    st.error(f"Login widget error: {e}")
 
-# Use a file uploader and store the uploaded files in session state to prevent re-running extraction on each widget interaction.
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = None
+# Retrieve the authentication status safely
+auth_status = st.session_state.get("authentication_status")
 
-uploaded_files = st.file_uploader(
-    "Upload Excel or PDF files", type=["xlsx", "pdf"], accept_multiple_files=True
-)
-if uploaded_files:
-    st.session_state.uploaded_files = uploaded_files
-
-# Extraction button: run only once and store results in session state.
-if st.button("Extract Company Info"):
-    if not st.session_state.uploaded_files:
-        st.error("Please upload at least one file.")
-    else:
-        combined_text = ""
-        for uploaded_file in st.session_state.uploaded_files:
-            ext = uploaded_file.name.split('.')[-1].lower()
-            if ext == "xlsx":
-                combined_text += extract_text_from_excel(uploaded_file) + "\n"
-            elif ext == "pdf":
-                combined_text += extract_text_from_pdf(uploaded_file) + "\n"
-            else:
-                st.warning(f"Unsupported file type: {uploaded_file.name}")
-        
-
-        st.info("Enhancing text...")
-        enhanced_text = extract_data(combined_text)
-        st.session_state.enhanced_text = enhanced_text
-
-
-        st.info("Extracting Company Information...")
-        company_infos = extract_company_info(enhanced_text)
-        st.session_state.company_infos = company_infos
-
-# If extraction is done, render the editable company details.
-if "company_infos" in st.session_state:
-    st.subheader("Extracted Company Information (Editable & Approve Each)")
-    approved_companies = []
-    for idx, info in enumerate(st.session_state.company_infos):
-        with st.expander(f"Company {idx+1} Details", expanded=True):
-            name = st.text_input("Name", value=info.name, key=f"name_{idx}")
-            package = st.text_input("Package", value=info.package, key=f"package_{idx}")
-            number_of_visas = st.number_input("Number of Visas", value=info.number_of_visas or 0, step=1, key=f"visas_{idx}")
-            number_of_shareholders = st.number_input("Number of Shareholders", value=info.number_of_shareholders or 0, step=1, key=f"shareholders_{idx}")
-            office_required = st.checkbox("Office Required", value=info.office_required if info.office_required is not None else False, key=f"office_{idx}")
-            cost = st.number_input("Cost", value=info.cost or 0.0, step=100.0, format="%.2f", key=f"cost_{idx}")
-            activity = st.text_input("Activity", value=info.activity if info.activity is not None else "", key=f"activity_{idx}")
-            
-            # Use checkbox without forcing a default value from info so that session state preserves user changes.
-            approved = st.checkbox("Approve this company", key=f"approve_{idx}")
-            
-            if approved:
-                updated_company = CompanyInfo(
-                    name=name,
-                    package=package,
-                    number_of_visas=number_of_visas,
-                    number_of_shareholders=number_of_shareholders,
-                    office_required=office_required,
-                    cost=cost,
-                    activity=activity,
-                )
-                approved_companies.append(updated_company)
+if auth_status is True:
+    st.write(f'Welcome **{st.session_state["name"]}**')
     
-    if st.button("Ingest Approved Data into Pinecone"):
-        if not approved_companies:
-            st.error("No companies approved for ingestion.")
+    st.write("Upload Excel and/or PDF files to extract, edit, approve, and then ingest company information into DB.")
+
+    # Use a file uploader and store the uploaded files in session state to prevent re-running extraction on each widget interaction.
+    if "uploaded_files" not in st.session_state:
+        st.session_state.uploaded_files = None
+
+    uploaded_files = st.file_uploader(
+        "Upload Excel or PDF files", type=["xlsx", "pdf"], accept_multiple_files=True
+    )
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+
+    # Extraction button: run only once and store results in session state.
+    if st.button("Extract Company Info"):
+        if not st.session_state.uploaded_files:
+            st.error("Please upload at least one file.")
         else:
-            ingest_to_pinecone_docs(approved_companies, embeddings)
+            combined_text = ""
+            for uploaded_file in st.session_state.uploaded_files:
+                ext = uploaded_file.name.split('.')[-1].lower()
+                if ext == "xlsx":
+                    combined_text += extract_text_from_excel(uploaded_file) + "\n"
+                elif ext == "pdf":
+                    combined_text += extract_text_from_pdf(uploaded_file) + "\n"
+                else:
+                    st.warning(f"Unsupported file type: {uploaded_file.name}")
+            
+
+            st.info("Enhancing text...")
+            enhanced_text = extract_data(combined_text)
+            st.session_state.enhanced_text = enhanced_text
+
+
+            st.info("Extracting Company Information...")
+            company_infos = extract_company_info(enhanced_text)
+            st.session_state.company_infos = company_infos
+
+    # If extraction is done, render the editable company details.
+    if "company_infos" in st.session_state:
+        st.subheader("Extracted Company Information (Editable & Approve Each)")
+        approved_companies = []
+        for idx, info in enumerate(st.session_state.company_infos):
+            with st.expander(f"Company {idx+1} Details", expanded=True):
+                name = st.text_input("Name", value=info.name, key=f"name_{idx}")
+                package = st.text_input("Package", value=info.package, key=f"package_{idx}")
+                number_of_visas = st.number_input("Number of Visas", value=info.number_of_visas or 0, step=1, key=f"visas_{idx}")
+                number_of_shareholders = st.number_input("Number of Shareholders", value=info.number_of_shareholders or 0, step=1, key=f"shareholders_{idx}")
+                office_required = st.checkbox("Office Required", value=info.office_required if info.office_required is not None else False, key=f"office_{idx}")
+                cost = st.number_input("Cost", value=info.cost or 0.0, step=100.0, format="%.2f", key=f"cost_{idx}")
+                activity = st.text_input("Activity", value=info.activity if info.activity is not None else "", key=f"activity_{idx}")
+                
+                # Use checkbox without forcing a default value from info so that session state preserves user changes.
+                approved = st.checkbox("Approve this company", key=f"approve_{idx}")
+                
+                if approved:
+                    updated_company = CompanyInfo(
+                        name=name,
+                        package=package,
+                        number_of_visas=number_of_visas,
+                        number_of_shareholders=number_of_shareholders,
+                        office_required=office_required,
+                        cost=cost,
+                        activity=activity,
+                    )
+                    approved_companies.append(updated_company)
+        
+        if st.button("Ingest Approved Data into Pinecone"):
+            if not approved_companies:
+                st.error("No companies approved for ingestion.")
+            else:
+                ingest_to_pinecone_docs(approved_companies, embeddings)
+elif st.session_state['authentication_status'] is True:
+    st.error('Username/password is incorrect')
+elif st.session_state['authentication_status'] is None:
+    st.warning('Please enter your username and password')
