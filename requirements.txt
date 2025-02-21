@@ -10,3 +10,4 @@ openpyxl
 langchain
 pinecone-client
 langchain-pinecone
+streamlit-authenticator
