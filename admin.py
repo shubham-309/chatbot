@@ -14,7 +14,7 @@ import os
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
-import uuid
+from docx import Document as DocxDocument  # Import for DOCX handling
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -71,10 +71,9 @@ class CompanyInfoList(BaseModel):
 llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.0)
 embeddings = OpenAIEmbeddings()
 
-# Create a Pinecone client instance with your API key.
+# Create a Pinecone client instance with your API key
 pc = Pinecone()
 index = os.getenv('PINECONE_INDEX_NAME')
-
 
 # Initialize the parser for CompanyInfoList
 parser = PydanticOutputParser(pydantic_object=CompanyInfoList)
@@ -109,6 +108,11 @@ enhancement_prompt = PromptTemplate(
     input_variables=["text"]
 )
 
+text_enhance_prompt = PromptTemplate(
+    template="""Generate a well-structured and professional summary of the given document. The summary should highlight key details, including pricing, categories, discounts, terms, and any other relevant information. Ensure clarity, conciseness, and a formal tone suitable for business or professional use.  Document: {text}\n\n",""",
+    input_variables=["text"]
+)
+
 def extract_company_info(text: str) -> List[CompanyInfo]:
     """Extracts structured company information from unstructured text."""
     response = (prompt | llm | parser).invoke({"text": text})
@@ -117,6 +121,11 @@ def extract_company_info(text: str) -> List[CompanyInfo]:
 def extract_data(text: str):
     """Extracts enhanced textual data from unstructured text."""
     response = (enhancement_prompt | llm).invoke({"text": text})
+    return response.content
+
+def enhance_extracted_document(text: str):
+    """Extracts enhanced textual data from unstructured text."""
+    response = (text_enhance_prompt | llm).invoke({"text": text})
     return response.content
 
 def extract_text_from_excel(uploaded_file) -> str:
@@ -140,11 +149,25 @@ def extract_text_from_pdf(uploaded_file) -> str:
         extracted_text += page.extract_text() + "\n"
     return extracted_text
 
+def extract_text_from_docx(uploaded_file) -> str:
+    """Extracts text from a DOCX file, including paragraphs and tables."""
+    try:
+        doc = DocxDocument(uploaded_file)
+        extracted_text = ""
+        for para in doc.paragraphs:
+            extracted_text += para.text + "\n"
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    extracted_text += cell.text + "\t"
+                extracted_text += "\n"
+        return extracted_text
+    except Exception as e:
+        st.error(f"Error extracting text from DOCX: {e}")
+        return ""
+
 def ingest_to_pinecone_docs(companies: List[CompanyInfo], embeddings):
-    """
-    Ingest approved companies into Pinecone by converting each company info into a Document,
-    including all metadata, and using PineconeVectorStore.from_documents.
-    """
+    """Ingest approved companies into Pinecone with metadata."""
     st.write("Starting ingestion process for companies...")
     for comp in companies:
         comp_text = (
@@ -181,21 +204,16 @@ def ingest_to_pinecone_docs(companies: List[CompanyInfo], embeddings):
                 st.error(f"Error while ingesting to Pinecone: {e}")
         else:
             st.warning("No document to ingest.")
-
     return "Approved companies have been ingested into Pinecone."
 
 def ingest_text_to_pinecone(text: str, embeddings):
-    """
-    Ingest raw text from uploaded files into Pinecone as a single Document.
-    """
+    """Ingest raw text into Pinecone as a single document."""
     if not text.strip():
         st.error("No text extracted from the uploaded files.")
         return
     document = Document(
         page_content=text,
-        metadata={
-            "isMain": True
-        }
+        metadata={"isMain": True}
     )
     try:
         PineconeVectorStore.from_documents(
@@ -207,10 +225,7 @@ def ingest_text_to_pinecone(text: str, embeddings):
     except Exception as e:
         st.error(f"Error while ingesting text: {e}")
 
-# ------------------------------
 # Streamlit App Layout with Tabs
-# ------------------------------
-
 st.title("FZcompare Admin")
 
 try:
@@ -226,17 +241,18 @@ if auth_status is True:
     
     tab1, tab2 = st.tabs(["Company Info", "Text Ingestion"])
 
-    # ------------------------------
     # Tab 1: Company Info Extraction & Ingestion
-    # ------------------------------
     with tab1:
-        st.write("Upload Excel and/or PDF files to extract, edit, approve, and then ingest company information into DB.")
+        st.write("Upload Excel, PDF, or DOCX files to extract, edit, approve, and ingest company information into DB.")
 
         if "uploaded_files" not in st.session_state:
             st.session_state.uploaded_files = None
 
         uploaded_files = st.file_uploader(
-            "Upload Excel or PDF files", type=["xlsx", "pdf"], accept_multiple_files=True, key="company_info_upload"
+            "Upload Excel, PDF, or DOCX files", 
+            type=["xlsx", "pdf", "docx"], 
+            accept_multiple_files=True, 
+            key="company_info_upload"
         )
         if uploaded_files:
             st.session_state.uploaded_files = uploaded_files
@@ -252,6 +268,8 @@ if auth_status is True:
                         combined_text += extract_text_from_excel(uploaded_file) + "\n"
                     elif ext == "pdf":
                         combined_text += extract_text_from_pdf(uploaded_file) + "\n"
+                    elif ext == "docx":
+                        combined_text += extract_text_from_docx(uploaded_file) + "\n"
                     else:
                         st.warning(f"Unsupported file type: {uploaded_file.name}")
 
@@ -296,16 +314,17 @@ if auth_status is True:
                 else:
                     ingest_to_pinecone_docs(approved_companies, embeddings)
 
-    # ------------------------------
     # Tab 2: Raw Text Ingestion
-    # ------------------------------
     with tab2:
-        st.write("Upload Excel and/or PDF files to extract and ingest the raw text directly into Pinecone.")
+        st.write("Upload Excel, PDF, or DOCX files to extract and ingest the raw text directly into Pinecone.")
         if "text_upload_files" not in st.session_state:
             st.session_state.text_upload_files = None
 
         text_uploaded_files = st.file_uploader(
-            "Upload Excel or PDF files for text ingestion", type=["xlsx", "pdf"], accept_multiple_files=True, key="text_ingest_upload"
+            "Upload Excel, PDF, or DOCX files for text ingestion", 
+            type=["xlsx", "pdf", "docx"], 
+            accept_multiple_files=True, 
+            key="text_ingest_upload"
         )
         if text_uploaded_files:
             st.session_state.text_upload_files = text_uploaded_files
@@ -321,8 +340,12 @@ if auth_status is True:
                         raw_text += extract_text_from_excel(uploaded_file) + "\n"
                     elif ext == "pdf":
                         raw_text += extract_text_from_pdf(uploaded_file) + "\n"
+                    elif ext == "docx":
+                        raw_text += extract_text_from_docx(uploaded_file) + "\n"
                     else:
                         st.warning(f"Unsupported file type: {uploaded_file.name}")
+                enhanced_text = enhance_extracted_document(raw_text)
+                st.session_state.enhanced_text = enhanced_text
                 st.info("Ingesting extracted text into Pinecone...")
                 ingest_text_to_pinecone(raw_text, embeddings)
 elif st.session_state.get('authentication_status') is False:
