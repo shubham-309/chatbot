@@ -1,5 +1,4 @@
 import json
-import os
 from typing import List, Dict, Optional
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -7,20 +6,17 @@ from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from dotenv import load_dotenv
 from langchain_pinecone import PineconeVectorStore
+import os
 load_dotenv()
 
 # Define the desired data structure with the 'all_parameters_collected' flag
 from typing import Optional
 from pydantic import BaseModel, Field
 
-index = os.getenv('PINECONE_INDEX_NAME')
 
+index = os.getenv('PINECONE_INDEX_NAME')
 # Define the parameters as a nested model
 class FreezoneParameters(BaseModel):
-    no_of_shareholders: Optional[int] = Field(
-        None, 
-        description="The number of shareholders. (Optional)"
-    )
     no_of_visas: Optional[int] = Field(
         None, 
         description="The number of visas. (Optional)"
@@ -29,17 +25,9 @@ class FreezoneParameters(BaseModel):
         None, 
         description="The activities required. (Optional)"
     )
-    cost: Optional[float] = Field(
-        None, 
-        description="The cost associated with the freezone. (Optional)"
-    )
     office_space: Optional[bool] = Field(
         None, 
         description="Indicates if office space is required. (Optional)"
-    )
-    preferred_location: Optional[str] = Field(
-        None, 
-        description="The preferred location for the freezone. (Optional)"
     )
 
 # Define the main response model with the 'parameters' field
@@ -55,8 +43,6 @@ class UserInputResponse(BaseModel):
 
 def vector_search(
     no_of_visa: int,
-    no_of_shareholder: int,
-    cost: int,
     office: bool,
 ) -> List[dict]:
     # Initialize the embedding model and vector store
@@ -68,12 +54,11 @@ def vector_search(
     )
 
     # Construct metadata filter based on the inputs
-    # metadata_filter = f"""The company has {no_of_shareholder} shareholders, employs {no_of_visa} visa holders, incurs a total cost of {cost}, and operates out of the {office} office."""
+    # metadata_filter = f"""The company has employs {no_of_visa} visa holders, incurs a total cost of {cost}, and operates out of the {office} office."""
     metadata_filter = {
         "number_of_visas": {"$gte": no_of_visa},
-        "number_of_shareholders": {"$gte": no_of_shareholder},
-        "cost": {"$lte": cost},
         "office_required": office,
+        "isMain": False,
     }
 
     # Perform similarity search with metadata filtering
@@ -84,7 +69,6 @@ def vector_search(
     )
 
     return similarity_search_results
-
 
 def give_suggestion(
     parameters: FreezoneParameters, user_query: str, chat_history: List[Dict[str, str]]
@@ -103,8 +87,6 @@ def give_suggestion(
     # Call vector_search to get data based on the parameters
     data = vector_search(
         parameters['no_of_visas'], 
-        parameters['no_of_shareholders'], 
-        parameters['cost'], 
         parameters['office_space']
     )
 
@@ -135,6 +117,37 @@ def give_suggestion(
 
     return results.content
 
+def vector_search_content(
+    query: str,
+):
+    # Initialize the embedding model and vector store
+    embeddings = OpenAIEmbeddings()
+    vector_store = PineconeVectorStore(
+        index_name=index,  # Replace with your Pinecone index name
+        embedding=embeddings,
+        text_key="text",
+    )
+
+    # Construct metadata filter based on the inputs
+    metadata_filter = {
+        "isMain": True,
+    }
+
+    # Perform similarity search with metadata filtering
+    similarity_search_results = vector_store.similarity_search_with_score(
+        query=query,
+        k=3,
+        filter=metadata_filter,
+    )
+
+    # Filter results to include only those with a score above 0.8
+    filtered_results = [result for result in similarity_search_results if result[1] > 0.8]
+
+    print(f"\nFiltered results: {filtered_results}")
+
+    return filtered_results
+
+
 # Function to process user input
 def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> Dict:
     """
@@ -145,6 +158,8 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
 
     # Define the output parser
     parser = JsonOutputParser(pydantic_object=UserInputResponse)
+
+    info = vector_search_content(user_query)
 
     # Build the prompt template
     prompt = PromptTemplate(
@@ -161,11 +176,11 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
             "Instructions:\n"
             "1. If the query is general, respond directly and move on to the next step.\n"
             "2. If the query relates to freezones, check the user's provided information in the chat history. "
-            "The parameters you need to collect are: 'No of shareholders', 'No of visas', 'Activities', 'Cost', "
-            "'Office space', and 'Preferred location'. These parameters are optional initially.\n"
+            "The parameters you need to collect are: 'No of visas', 'Activities' and"
+            "'Office space'. These parameters are optional initially.\n"
             "3. If any of the parameters are missing, ask the user for one missing parameter at a time in a conversational "
             "manner.\n"
-            "4. Only when **all** parameters ('No of shareholders', 'No of visas', 'Activities', 'Cost', 'Office space', and 'Preferred location') "
+            "4. Only when **all** parameters ('No of visas', 'Activities' and 'Office space') "
             "are provided should you set the flag `all_parameters_collected` to `True`.\n"
             "5. If all parameters are collected, suggest appropriate freezones based on the user's input. The assistant should "
             "suggest the best freezones by referencing the parameters the user provided.\n"
@@ -174,9 +189,19 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
             "7. If any parameters are missing, the assistant should respond with which specific parameter is still needed. "
             "Repeat this until all parameters are collected.\n"
             "8. Your tone should be user friendly and appealing, try to be best while interacting."
+            "9. If the user asks a general question about freezones, provide a general response.\n"
+            "10. If the user asks a question that is illegal/offensive, respond with 'Please don't ask for illegal or offensive information. Your request has been flagged, and repeated violations may result in a ban by the admin. I can only answer questions related to free zones.'\n"
+            "11. If the user asks a question that is not related to freezones, respond with 'I am sorry, I can't help you with that. I can only answer questions related to freezones.'\n"
+            "12. If the user asks for a suggestion without providing all the required parameters, prompt the user for the missing parameters.\n"
+            "13. If the user asks for a suggestion after providing all the required parameters, provide the suggestion based on the collected parameters.\n"
+            "14. If the user asks for a more information on the suggestion that has already been provided in the chat context, set the flag to `False` and respond to user's query.\n"
+            "15. If the user asks for a suggestion after providing all the required parameters, set the flag to `True` and provide the suggestion based on the collected parameters.\n"
+            "16. Never respond with 'I have already provided you with a detailed explanation...'  you you provide information to user as many no. of time he wants."
+            "16. Do not repeat user provided input in the response, only provide the necessary information.\n"
             
             "\nChat history:\n{chat_history}\n\n"
             "User query:\n{query}\n\n"
+            "Information on Freezones:\n{info}\n\n"
             "Your task is to:\n"
             "1. If all required parameters are collected, set `all_parameters_collected` to `True` and if the suggestion is already provided in the chat then set it to null and manage it accordingly"
             "2. If parameters are missing, prompt the user for the missing ones one at a time."
@@ -186,7 +211,7 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
             "you can never ever do this 'response': None, 'all_parameters_collected': False, got it,    if all the parameters are received and the user is asking for suggestion then set the flag to true otherwise under reply properly and accordingly"
             "also see in the chat history if the suggestion is already given in the current context then set the flag to falso and reply accordingly"
 
-            "Also always remember that you are an interactive chatbot which means user can also ask general questions to you relates to freezones like  what is a freezone, How much does a company cost?, etc in which case you have to answer the user whatever query they are asking as long as it is in your score otherwise reply with i am sorry i cant help you with that i can only answer .....(you got what i mean right)"
+            "Also always remember that you are an interactive chatbot which means user can also ask general questions to you relates to freezones only like  what is a freezone, How much does a company cost?, etc in which case you have to answer the user whatever query they are asking as long as it is in related to freezone otherwise reply with i am sorry i cant help you with that i can only answer .....(you got what i mean right)"
             
             ""
         ),
@@ -198,7 +223,7 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
     chain = prompt | model | parser
 
     # Invoke the chain with the user query and chat history
-    result = chain.invoke({"query": user_query, "chat_history": str(chat_history)})
+    result = chain.invoke({"query": user_query, "chat_history": str(chat_history), "info": str(info)})
     print(f"\nAssistant result  : {result}")
     if result["all_parameters_collected"]:
         print(f"\n  {type(result['parameters'])}  Assistant Suggestion: {result['parameters']}")
@@ -209,6 +234,6 @@ def process_user_input(user_query: str, chat_history: List[Dict[str, str]]) -> D
             user_query=user_query, 
             chat_history=chat_history
         )
-        print(f"\nAssistant Suggestionnnnnn    : {suggestion}")
+        print(f"\nAssistant Suggestion    : {suggestion}")
         return suggestion
     return result['response'] or "some error occured unable to fetch"
