@@ -9,5 +9,6 @@ python-dotenv
 openpyxl
 langchain
 pinecone-client
+python-docx
 langchain-pinecone
 streamlit-authenticator
